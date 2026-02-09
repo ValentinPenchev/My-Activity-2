@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Activity Royale Real-Time</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    
+    <style>
+        :root {
+            --primary: #ff512f;
+            --secondary: #dd2476;
+            --blue-team: #00d2ff;
+            --red-team: #ff4b2b;
+            --glass: rgba(255, 255, 255, 0.1);
+        }
+        body {
+            margin: 0; padding: 10px; font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+        }
+        .scoreboard { display: flex; gap: 15px; margin-bottom: 15px; width: 100%; max-width: 600px; }
+        .score-box { flex: 1; padding: 10px; border-radius: 15px; text-align: center; backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.1); }
+        .blue { background: rgba(0, 210, 255, 0.2); border-color: var(--blue-team); }
+        .red { background: rgba(255, 75, 43, 0.2); border-color: var(--red-team); }
+        .score-number { font-size: 2.2rem; font-weight: bold; display: block; }
+        .game-container { width: 95%; max-width: 650px; background: var(--glass); backdrop-filter: blur(15px); border-radius: 30px; padding: 20px; text-align: center; }
+        h1 { font-size: 1.6rem; min-height: 65px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .dice-result { color: #00ffcc; font-size: 2.8rem; }
+        .decks { display: flex; gap: 15px; justify-content: center; margin: 20px 0; min-height: 220px; }
+        .decks.locked { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
+        .deck-container { width: 130px; height: 190px; perspective: 1000px; cursor: pointer; transition: 0.4s; }
+        .deck-container.selected { width: 310px; height: 430px; z-index: 10; }
+        .deck-container.hidden { width: 0; opacity: 0; margin: 0; pointer-events: none; }
+        .deck { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: 0.7s; }
+        .deck.flipped { transform: rotateY(180deg); }
+        .deck-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 20px; overflow: hidden; border: 2px solid rgba(255,255,255,0.2); }
+        .deck-face img { width: 100%; height: 100%; object-fit: cover; }
+        .deck-back { transform: rotateY(180deg); background: white; color: #222; display: flex; align-items: center; justify-content: center; }
+        .card-content { padding: 25px; font-weight: bold; font-size: 1.7rem; text-align: left; width: 100%; }
+        .card-content div { border-bottom: 2px solid #f0f0f0; padding: 12px 0; }
+        #success-area { display: none; margin: 15px 0; flex-direction: column; gap: 10px; }
+        .btn-success { background: linear-gradient(45deg, #00b09b, #96c93d); padding: 18px; font-size: 1.4rem; border-radius: 15px; border: none; color: white; font-weight: bold; cursor: pointer; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { padding: 15px; border: none; border-radius: 15px; font-weight: bold; color: white; cursor: pointer; }
+        .dice-btn { background: linear-gradient(45deg, var(--primary), var(--secondary)); }
+        .timer-btn { background: linear-gradient(45deg, #f09819, #edde5d); color: #222; }
+        .reset-btn { background: #333; grid-column: span 2; }
+        .timer-display { font-size: 4.5rem; color: #00ffcc; font-family: monospace; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="scoreboard">
+    <div class="score-box blue"><span>СИНИ</span><span class="score-number" id="score-blue">0</span></div>
+    <div class="score-box red"><span>ЧЕРВЕНИ</span><span class="score-number" id="score-red">0</span></div>
+</div>
+
+<div class="game-container">
+    <h1 id="game-title">🎮 My Activity</h1>
+    <div class="decks locked" id="decks-wrapper">
+        <div class="deck-container" id="d3" onclick="selectDeck(3, this)"><div class="deck"><div class="deck-face"><img src="3 back.png"></div><div class="deck-face deck-back"></div></div></div>
+        <div class="deck-container" id="d4" onclick="selectDeck(4, this)"><div class="deck"><div class="deck-face"><img src="4 back.png"></div><div class="deck-face deck-back"></div></div></div>
+        <div class="deck-container" id="d5" onclick="selectDeck(5, this)"><div class="deck"><div class="deck-face"><img src="5 back.png"></div><div class="deck-face deck-back"></div></div></div>
+    </div>
+    <div id="success-area">
+        <button id="success-label" class="btn-success" onclick="showScoreSelection()">✅ ПОЗНАТО!</button>
+        <div id="score-selection" style="display:none; gap:10px; margin-top:10px;">
+            <button id="add-blue" style="background:var(--blue-team); flex:1" onclick="addPoint('blue')"></button>
+            <button id="add-red" style="background:var(--red-team); flex:1" onclick="addPoint('red')"></button>
+        </div>
+    </div>
+    <div class="controls">
+        <button id="dice-btn" class="dice-btn" onclick="rollDice()">🎲 ЗАРЧЕ</button>
+        <button id="t-btn" class="timer-btn" onclick="startTimer()">⏱ 60 СЕК</button>
+        <button class="reset-btn" onclick="resetCloud()">🔄 НОВ ХОД</button>
+    </div>
+    <div class="timer-display" id="timer">60</div>
+</div>
+
+<script>
+    // --- ВАШАТА ФИНАЛНА КОНФИГУРАЦИЯ ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyC98brPgVFU1QIFpE9Q8N61xDiarrFERhM",
+        authDomain: "my-activity-d2bc5.firebaseapp.com",
+        databaseURL: "https://my-activity-d2bc5-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "my-activity-d2bc5",
+        storageBucket: "my-activity-d2bc5.firebasestorage.app",
+        messagingSenderId: "940491408918",
+        appId: "1:940491408918:web:c7b521d5e36f7711bc5737",
+        measurementId: "G-NN76LJX7ET"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref("game_session_global");
+
+    let currentLevelPoints = 0;
+    const cards = {
+        3: [{draw:"Мост", act:"Колебаеш се", speak:"Отговорност"}, {draw:"Планина", act:"Решаваш", speak:"Доверие"}, {draw:"Карта", act:"Объркан", speak:"Провал"}, {draw:"Кораб", act:"Съмняваш се", speak:"Навик"}, {draw:"Часовник", act:"Паника", speak:"Натиск"}, {draw:"Лабиринт", act:"Търпелив", speak:"Баланс"}, {draw:"Плаж", act:"Влюбен", speak:"Граница"}, {draw:"Сянка", act:"Ядосан", speak:"Принцип"}, {draw:"Кула", act:"Спокоен", speak:"Последица"}, {draw:"Маска", act:"Преструваш се", speak:"Истина"}, {draw:"Вълна", act:"Очакваш", speak:"Избор"}, {draw:"Везни", act:"Сравняваш", speak:"Компромис"}, {draw:"Кръг", act:"Отказваш", speak:"Причина"}, {draw:"Стълба", act:"Опиваташ", speak:"Резултат"}, {draw:"Пъзел", act:"Тържествуваш", speak:"Гордост"}, {draw:"Клетка", act:"Бягаш", speak:"Свобода"}, {draw:"Линия", act:"Спираш", speak:"Граница"}, {draw:"Флаг", act:"Защитаваш", speak:"Позиция"}, {draw:"Врата", act:"Съмняваш се", speak:"Вяра"}, {draw:"Огън", act:"Рискуваш", speak:"Последствие"}, {draw:"Път", act:"Избираш", speak:"Насока"}, {draw:"Рамка", act:"Оглеждаш", speak:"Перспектива"}, {draw:"Ключ", act:"Отказ", speak:"Решение"}, {draw:"Сфера", act:"Контролираш", speak:"Натиск"}, {draw:"Стена", act:"Спираш", speak:"Пречка"}, {draw:"Мрежа", act:"Свързваш", speak:"Контакт"}, {draw:"Пясък", act:"Изпускаш", speak:"Време"}, {draw:"Компас", act:"Насочваш", speak:"Посока"}, {draw:"Лък", act:"Целиш", speak:"Амбиция"}, {draw:"Ключалка", act:"Пазиш", speak:"Тайна"}, {draw:"Топка", act:"Подхвърляш", speak:"Шанс"}, {draw:"Платно", act:"Създаваш", speak:"Идея"}, {draw:"Квадрат", act:"Подреждаш", speak:"Ред"}, {draw:"Кора", act:"Защитаваш", speak:"Сигурност"}, {draw:"Стрелка", act:"Насочваш", speak:"Цел"}, {draw:"Сандък", act:"Откриваш", speak:"Изненада"}, {draw:"Парашут", act:"Падаш", speak:"Риск"}, {draw:"Камък", act:"Упорстваш", speak:"Инат"}, {draw:"Мост", act:"Свързваш", speak:"Компромис"}, {draw:"Лабиринт", act:"Губиш се", speak:"Търсене"}],
+        4: [{draw:"Хаос", act:"Импровизираш", speak:"Смисъл"}, {draw:"Безкрайност", act:"Губиш контрол", speak:"Същност"}, {draw:"Баланс", act:"Колебаеш", speak:"Избор"}, {draw:"Парадокс", act:"Отричаш", speak:"Истина"}, {draw:"Граница", act:"Ограничен", speak:"Свобода"}, {draw:"Център", act:"Фокусираш", speak:"Приоритет"}, {draw:"Отражение", act:"Имитираш", speak:"Идентичност"}, {draw:"Разлом", act:"Разделяш", speak:"Конфликт"}, {draw:"Път", act:"Лутане", speak:"Посока"}, {draw:"Спирала", act:"Повтаряш", speak:"Цикъл"}, {draw:"Тежест", act:"Натиск", speak:"Отговорност"}, {draw:"Мъгла", act:"Несигурност", speak:"Съмнение"}, {draw:"Връх", act:"Триумф", speak:"Успех"}, {draw:"Празнота", act:"Замръзваш", speak:"Липса"}, {draw:"Искра", act:"Възпламеняваш", speak:"Вдъхновение"}, {draw:"Пукнатина", act:"Пречупваш", speak:"Крах"}, {draw:"Точка", act:"Спираш", speak:"Край"}, {draw:"Вълна", act:"Завличаш", speak:"Влияние"}, {draw:"Огън", act:"Унищожаваш", speak:"Промяна"}, {draw:"Сянка", act:"Криеш", speak:"Страх"}, {draw:"Лабиринт", act:"Блуждаеш", speak:"Търсене"}, {draw:"Мост", act:"Свързваш", speak:"Диалог"}, {draw:"Кръг", act:"Повтаряш", speak:"Навик"}, {draw:"Стена", act:"Отблъскваш", speak:"Граница"}, {draw:"Ключ", act:"Отключваш", speak:"Решение"}, {draw:"Пропаст", act:"Колебание", speak:"Риск"}, {draw:"Платформа", act:"Издигаш", speak:"Възможност"}, {draw:"Пътеводител", act:"Насочваш", speak:"Смисъл"}, {draw:"Рамка", act:"Ограничаваш", speak:"Контекст"}, {draw:"Тежест", act:"Притискаш", speak:"Натиск"}, {draw:"Знак", act:"Показваш", speak:"Значение"}, {draw:"Праг", act:"Прекрачваш", speak:"Начало"}, {draw:"Верига", act:"Задържаш", speak:"Зависимост"}, {draw:"Маска", act:"Преструваш", speak:"Лъжа"}, {draw:"Ритъм", act:"Повтаряш", speak:"Процес"}, {draw:"Точка", act:"Решителност", speak:"Финал"}, {draw:"Пламък", act:"Импулс", speak:"Желание"}, {draw:"Корен", act:"Заземяваш", speak:"Произход"}, {draw:"Контур", act:"Очертаваш", speak:"Граница"}, {draw:"Възел", act:"Заплиташ", speak:"Проблем"}],
+        5: [{draw:"Вулкан", act:"Експлозивен", speak:"Енергия"}, {draw:"Космос", act:"Безтегловност", speak:"Мисия"}, {draw:"Пясък", act:"Изпускаш", speak:"Време"}, {draw:"Компас", act:"Насочваш", speak:"Посока"}, {draw:"Звезда", act:"Блестиш", speak:"Мечта"}, {draw:"Бездна", act:"Пропадаш", speak:"Минало"}]
+    };
+
+    const alarm = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg");
+
+    // Синхронизация при промяна в базата данни
+    db.on("value", (snap) => {
+        const data = snap.val();
+        if(!data) {
+            // Инициализация ако базата е празна
+            db.set({ scores: { blue: 0, red: 0 }, timer: 60, title: "🎮 My Activity", cardsLocked: true, timerRunning: false });
+            return;
+        }
+        document.getElementById("score-blue").textContent = data.scores.blue;
+        document.getElementById("score-red").textContent = data.scores.red;
+        document.getElementById("timer").textContent = data.timer;
+        document.getElementById("game-title").innerHTML = data.title;
+        
+        if(data.cardsLocked) document.getElementById("decks-wrapper").classList.add("locked");
+        else document.getElementById("decks-wrapper").classList.remove("locked");
+
+        if(data.timer === 0 && data.timerRunning) {
+            alarm.play();
+            db.update({ timerRunning: false });
+        }
+    });
+
+    function rollDice() {
+        const ops = [{i:"🎨", t:"Рисувай"}, {i:"🎭", t:"Покажи"}, {i:"🗣", t:"Обясни"}];
+        let c = 0;
+        const iv = setInterval(() => {
+            const p = ops[Math.floor(Math.random()*3)];
+            const html = `<span class="dice-result">${p.i}</span> <span class="dice-text">${p.t}</span>`;
+            document.getElementById("game-title").innerHTML = html;
+            if(c++ > 15) {
+                clearInterval(iv);
+                db.update({ title: html, cardsLocked: false });
+            }
+        }, 70);
+    }
+
+    function selectDeck(lvl, el) {
+        currentLevelPoints = lvl;
+        const card = cards[lvl].shift(); 
+        cards[lvl].push(card);
+        
+        document.querySelectorAll(".deck-container").forEach(d => d !== el && d.classList.add("hidden"));
+        el.classList.add("selected");
+        el.querySelector(".deck").classList.add("flipped");
+        el.querySelector(".deck-back").innerHTML = `<div class="card-content"><div>🎨 ${card.draw}</div><div>🎭 ${card.act}</div><div>🗣 ${card.speak}</div></div>`;
+        
+        document.getElementById("success-label").textContent = `✅ ПОЗНАТО (+${lvl} т.)`;
+        document.getElementById("add-blue").textContent = `СИНИ (+${lvl})`;
+        document.getElementById("add-red").textContent = `ЧЕРВЕНИ (+${lvl})`;
+        document.getElementById("success-area").style.display = "flex";
+    }
+
+    function startTimer() {
+        let t = 60;
+        db.update({ timerRunning: true });
+        const iv = setInterval(() => {
+            t--;
+            db.update({ timer: t });
+            if(t <= 0) clearInterval(iv);
+        }, 1000);
+    }
+
+    function showScoreSelection() { document.getElementById("score-selection").style.display = "flex"; }
+
+    function addPoint(team) {
+        db.child("scores").child(team).transaction(s => (s || 0) + currentLevelPoints);
+        resetCloud();
+    }
+
+    function resetCloud() {
+        db.update({ title: "🎮 My Activity", timer: 60, cardsLocked: true, timerRunning: false });
+        // Малък ресет на локалния интерфейс
+        document.getElementById("success-area").style.display = "none";
+        document.getElementById("score-selection").style.display = "none";
+        document.querySelectorAll(".deck-container").forEach(d => {
+            d.classList.remove("hidden", "selected");
+            d.querySelector(".deck").classList.remove("flipped");
+        });
+    }
+</script>
+</body>
+</html>
