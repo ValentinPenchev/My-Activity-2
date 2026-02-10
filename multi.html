@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Activity Royale Pro</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    
+    <style>
+        :root {
+            --primary: #ff512f;
+            --secondary: #dd2476;
+            --glass: rgba(255, 255, 255, 0.1);
+            --accent: #00ffcc;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            margin: 0; padding: 10px; font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+            overflow-x: hidden;
+        }
+
+        /* МЕНЮ */
+        .settings-btn { position: absolute; top: 15px; right: 15px; background: var(--glass); border: 1px solid rgba(255,255,255,0.2); padding: 12px; border-radius: 50%; cursor: pointer; z-index: 100; font-size: 1.2rem; line-height: 1; }
+        .side-menu { position: fixed; top: 0; right: -300px; width: 280px; height: 100%; background: #1e1e32; box-shadow: -5px 0 20px rgba(0,0,0,0.5); transition: 0.3s ease; z-index: 1000; padding: 25px; }
+        .side-menu.active { right: 0; }
+        .menu-close { background: none; border: none; color: white; font-size: 1.5rem; float: right; cursor: pointer; }
+        
+        /* ТАБЛО */
+        .scoreboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; width: 100%; max-width: 600px; margin-bottom: 15px; margin-top: 50px; }
+        .score-box { padding: 10px; border-radius: 15px; text-align: center; backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.1); position: relative; }
+        .score-number { font-size: 1.8rem; font-weight: bold; display: block; color: var(--accent); }
+        .btn-del { position: absolute; top: 2px; right: 5px; color: rgba(255,255,255,0.3); border: none; background: none; font-size: 0.8rem; cursor: pointer; }
+
+        /* ИГРА */
+        .game-container { width: 95%; max-width: 650px; background: var(--glass); backdrop-filter: blur(15px); border-radius: 30px; padding: 20px; text-align: center; }
+        h1 { font-size: 1.5rem; min-height: 60px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        
+        .decks { display: flex; gap: 10px; justify-content: center; margin: 15px 0; min-height: 200px; }
+        .decks.locked { pointer-events: none; }
+        
+        .deck-container { width: 100px; height: 150px; perspective: 1000px; cursor: pointer; transition: 0.4s; }
+        .deck-container.selected { width: 310px; height: 430px; z-index: 100; cursor: default; }
+        .deck-container.hidden { width: 0; opacity: 0; margin: 0; pointer-events: none; }
+        
+        .deck { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: 0.6s; }
+        .deck.flipped { transform: rotateY(180deg); }
+        .deck-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 15px; overflow: hidden; border: 2px solid rgba(255,255,255,0.2); }
+        .deck-face img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .deck-back { 
+            transform: rotateY(180deg); 
+            background: #ffffff !important; 
+            color: #1a1a1a !important; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            border-radius: 15px; 
+            box-shadow: 0 15px 50px rgba(0,0,0,0.8); 
+            border: 2px solid #ffffff;
+        }
+        .card-content { padding: 15px; width: 100%; }
+        .card-row { 
+            display: grid; 
+            grid-template-columns: 40px 1fr; 
+            align-items: center; 
+            gap: 15px; 
+            padding: 18px 10px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+        .card-row:last-child { border: none; }
+        .card-row span:first-child { font-size: 1.8rem; }
+        .card-row span:last-child { font-weight: 800; font-size: 1.4rem; line-height: 1.2; word-break: break-word; }
+
+        /* СЕКЦИЯ ПОЗНАТО / ТОЧКИ */
+        #success-area { display: none; margin: 15px 0; flex-direction: column; gap: 10px; }
+        .btn-success { background: linear-gradient(45deg, #00b09b, #96c93d); padding: 18px; font-size: 1.2rem; border-radius: 15px; border: none; color: white; font-weight: bold; cursor: pointer; }
+        
+        .score-selection-grid { display: none; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .team-point-btn { padding: 14px; border-radius: 12px; border: none; color: white; font-weight: bold; cursor: pointer; font-size: 1rem; }
+
+        /* КОНТРОЛИ */
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .dice-btn { background: linear-gradient(45deg, var(--primary), var(--secondary)); padding: 15px; border-radius: 15px; font-weight: bold; color: white; border: none; cursor: pointer; }
+        .timer-btn { background: #f09819; color: #222; padding: 15px; border-radius: 15px; font-weight: bold; border: none; cursor: pointer; }
+        .timer-btn:disabled { background: #555; color: #888; cursor: not-allowed; opacity: 0.6; }
+
+        .reset-btn { background: #333; grid-column: span 2; padding: 12px; border-radius: 15px; margin-top: 10px; color: white; border: none; font-weight: bold; cursor: pointer; }
+        .timer-display { font-size: 4rem; color: var(--accent); font-family: monospace; font-weight: bold; margin-top: 5px; }
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; justify-content: center; align-items: center; font-size: 1.5rem; }
+    </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">Записване...</div>
+<button class="settings-btn" onclick="toggleMenu()">⚙️</button>
+
+<div class="side-menu" id="side-menu">
+    <button class="menu-close" onclick="toggleMenu()">✕</button>
+    <h3 style="margin-top: 20px;">Настройки</h3>
+    <a href="index.html" style="text-decoration: none;">
+    <button style="width:100%; background: linear-gradient(45deg, #00d2ff, #3a7bd5); color:white; padding:15px; border:none; font-weight:800; border-radius:12px; cursor:pointer; display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,210,255,0.3); text-transform: uppercase; font-size: 0.9rem;">
+        🏠 ГЛАВНО МЕНЮ
+    </button>
+</a>
+
+<div style="height: 1px; background: rgba(255,255,255,0.1); margin-bottom: 20px;"></div>
+    <input type="text" id="team-name-input" placeholder="Име на отбор" style="width:100%; padding:10px; margin-bottom:10px; border-radius:5px; border:none;">
+    <button onclick="createNewTeam()" style="width:100%; background:var(--accent); color:black; padding:10px; border:none; font-weight:bold; border-radius:5px;">Добави отбор +</button>
+    <button onclick="resetGlobalScores()" style="width:100%; background:#ff4b2b; color:white; padding:10px; border:none; font-weight:bold; margin-top:40px; border-radius:5px;">НУЛИРАЙ РЕЗУЛТАТА</button>
+</div>
+
+<div class="scoreboard" id="scoreboard-ui"></div>
+
+<div class="game-container">
+    <h1 id="game-title">🎮 My Activity</h1>
+    
+    <div class="decks locked" id="decks-wrapper">
+        <div class="deck-container" id="d3" onclick="selectDeck(3, this)"><div class="deck"><div class="deck-face"><img src="3 back.png"></div><div class="deck-face deck-back"></div></div></div>
+        <div class="deck-container" id="d4" onclick="selectDeck(4, this)"><div class="deck"><div class="deck-face"><img src="4 back.png"></div><div class="deck-face deck-back"></div></div></div>
+        <div class="deck-container" id="d5" onclick="selectDeck(5, this)"><div class="deck"><div class="deck-face"><img src="5 back.png"></div><div class="deck-face deck-back"></div></div></div>
+    </div>
+
+    <div id="success-area">
+        <button id="success-label" class="btn-success" onclick="stopTimerAndShowScores()">✅ ПОЗНАТО!</button>
+        <div id="score-selection" class="score-selection-grid"></div>
+    </div>
+
+    <div class="controls">
+        <button class="dice-btn" onclick="rollDice()">🎲 ЗАРЧЕ</button>
+        <button id="t-btn" class="timer-btn" onclick="startTimer()" disabled>⏱ СТАРТ</button>
+        <button class="reset-btn" onclick="resetCloud()">🔄 НОВ ХОД</button>
+    </div>
+    <div class="timer-display" id="timer">60</div>
+</div>
+
+<script>
+    const cards = {
+        3: [{d:"Мост", a:"Колебаеш се", s:"Отговорност"}, {d:"Карта", a:"Объркан", s:"Провал"}, {d:"Часовник", a:"Паника", s:"Натиск"}],
+        4: [{d:"Хаос", a:"Импровизираш", s:"Смисъл"}, {d:"Пират", a:"Копае", s:"Злато"}, {d:"Парадокс", a:"Отричаш", s:"Истина"}],
+        5: [{d:"Вулкан", a:"Експлозивен", s:"Енергия"}, {d:"Космос", a:"Безтегловност", s:"Мисия"}]
+    };
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyC98brPgVFU1QIFpE9Q8N61xDiarrFERhM",
+        authDomain: "my-activity-d2bc5.firebaseapp.com",
+        databaseURL: "https://my-activity-d2bc5-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "my-activity-d2bc5",
+        storageBucket: "my-activity-d2bc5.firebasestorage.app",
+        messagingSenderId: "940491408918",
+        appId: "1:940491408918:web:c7b521d5e36f7711bc5737"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref("game_session_v6");
+
+    let currentLevelPoints = 0;
+    let timerInterval = null;
+
+    function toggleMenu() { document.getElementById("side-menu").classList.toggle("active"); }
+
+    db.on("value", (snap) => {
+        const data = snap.val();
+        if(!data) {
+            db.set({ teams: [{name:"СИНИ", score:0, color:"#00d2ff"}, {name:"ЧЕРВЕНИ", score:0, color:"#ff4b2b"}], timer:60, title:"🎮 My Activity", cardsLocked:true, timerRunning:false });
+            return;
+        }
+
+        document.getElementById("timer").textContent = data.timer;
+        document.getElementById("game-title").innerHTML = data.title;
+        
+        if(data.cardsLocked) document.getElementById("decks-wrapper").classList.add("locked");
+        else document.getElementById("decks-wrapper").classList.remove("locked");
+
+        if(!data.timerRunning && timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+
+        const sbUI = document.getElementById("scoreboard-ui");
+        const selUI = document.getElementById("score-selection");
+        sbUI.innerHTML = ""; selUI.innerHTML = "";
+
+        data.teams.forEach((t, i) => {
+            sbUI.innerHTML += `<div class="score-box" style="border-color:${t.color}"><button class="btn-del" onclick="removeTeam(${i})">✕</button><span>${t.name}</span><span class="score-number">${t.score}</span></div>`;
+            selUI.innerHTML += `<button class="team-point-btn" style="background:${t.color}" onclick="addPointsToTeam(${i})">${t.name} (+${currentLevelPoints})</button>`;
+        });
+    });
+
+    function selectDeck(lvl, el) {
+        const currentCard = cards[lvl].shift();
+        cards[lvl].push(currentCard);
+        currentLevelPoints = lvl;
+
+        db.update({ cardsLocked: true });
+        document.getElementById("t-btn").disabled = false;
+
+        document.querySelectorAll(".deck-container").forEach(d => d !== el && d.classList.add("hidden"));
+        el.classList.add("selected");
+        el.querySelector(".deck").classList.add("flipped");
+
+        el.querySelector(".deck-back").innerHTML = `
+            <div class="card-content">
+                <div class="card-row"><span>🎨</span><span>${currentCard.d}</span></div>
+                <div class="card-row"><span>🎭</span><span>${currentCard.a}</span></div>
+                <div class="card-row"><span>🗣</span><span>${currentCard.s}</span></div>
+            </div>`;
+        
+        document.getElementById("success-area").style.display = "flex";
+        document.getElementById("success-label").style.display = "block";
+        document.getElementById("score-selection").style.display = "none";
+    }
+
+    function rollDice() {
+        const ops = [{i:"🎨", t:"Рисувай"}, {i:"🎭", t:"Покажи"}, {i:"🗣", t:"Обясни"}];
+        let c = 0;
+        const iv = setInterval(() => {
+            const p = ops[Math.floor(Math.random()*3)];
+            document.getElementById("game-title").innerHTML = `<span>${p.i}</span> ${p.t}`;
+            if(c++ > 12) { clearInterval(iv); db.update({ title: document.getElementById("game-title").innerHTML, cardsLocked: false }); }
+        }, 70);
+    }
+
+    function startTimer() {
+        let t = 60; db.update({ timerRunning: true });
+        timerInterval = setInterval(() => {
+            t--; db.update({ timer: t });
+            if(t <= 0) { clearInterval(timerInterval); db.update({ timerRunning: false }); }
+        }, 1000);
+    }
+
+    function stopTimerAndShowScores() {
+        // 1. Спираме таймера
+        db.update({ timerRunning: false });
+        // 2. Скриваме "ПОЗНАТО"
+        document.getElementById("success-label").style.display = "none";
+        // 3. ПОКАЗВАМЕ отборите за гласуване
+        document.getElementById("score-selection").style.display = "grid";
+    }
+
+    function addPointsToTeam(index) {
+        document.getElementById("loading").style.display = "flex";
+        db.child("teams").once("value", snap => {
+            const teams = snap.val();
+            teams[index].score += currentLevelPoints;
+            db.child("teams").set(teams).then(() => {
+                setTimeout(() => {
+                    document.getElementById("loading").style.display = "none";
+                    resetCloud();
+                }, 500);
+            });
+        });
+    }
+
+    function resetCloud() {
+        db.update({ title: "🎮 My Activity", timer: 60, cardsLocked: true, timerRunning: false });
+        document.getElementById("t-btn").disabled = true;
+        document.getElementById("success-area").style.display = "none";
+        document.querySelectorAll(".deck-container").forEach(d => {
+            d.classList.remove("hidden", "selected");
+            d.querySelector(".deck").classList.remove("flipped");
+        });
+    }
+
+    // МЕНЮ ФУНКЦИИ
+    function createNewTeam() {
+        const name = document.getElementById("team-name-input").value;
+        if(!name) return;
+        db.child("teams").once("value", snap => {
+            const teams = snap.val() || [];
+            const colors = ["#00d2ff", "#ff4b2b", "#28a745", "#ffc107", "#e83e8c"];
+            teams.push({ name: name, score: 0, color: colors[teams.length % colors.length] });
+            db.child("teams").set(teams);
+            document.getElementById("team-name-input").value = "";
+            toggleMenu();
+        });
+    }
+    function removeTeam(index) {
+        db.child("teams").once("value", snap => {
+            const teams = snap.val();
+            teams.splice(index, 1);
+            db.child("teams").set(teams);
+        });
+    }
+    function resetGlobalScores() {
+        db.child("teams").once("value", snap => {
+            const teams = snap.val().map(t => ({ ...t, score: 0 }));
+            db.child("teams").set(teams);
+            toggleMenu();
+            resetCloud();
+        });
+    }
+</script>
+</body>
+</html>

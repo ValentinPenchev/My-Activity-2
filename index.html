@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Activity Royale - Меню</title>
+    <style>
+        :root {
+            --primary: #ff512f;
+            --secondary: #dd2476;
+            --glass: rgba(255, 255, 255, 0.1);
+            --accent: #00ffcc;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            margin: 0; padding: 20px; font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+
+        .menu-container {
+            width: 100%; max-width: 400px;
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border-radius: 30px;
+            padding: 40px 20px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        h1 { font-size: 2.2rem; margin-bottom: 10px; text-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        p { color: rgba(255,255,255,0.7); margin-bottom: 30px; font-size: 1.1rem; }
+
+        .menu-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; padding: 25px; margin-bottom: 20px;
+            border-radius: 20px; border: none; cursor: pointer;
+            text-decoration: none; color: white; transition: 0.3s;
+            position: relative; overflow: hidden;
+        }
+
+        .btn-classic {
+            background: linear-gradient(45deg, #4facfe, #00f2fe);
+            box-shadow: 0 10px 20px rgba(79, 172, 254, 0.3);
+        }
+
+        .btn-multi {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            box-shadow: 0 10px 20px rgba(221, 36, 118, 0.3);
+        }
+
+        .menu-btn:hover { transform: translateY(-5px); filter: brightness(1.1); }
+        .menu-btn:active { transform: translateY(0); }
+
+        .btn-icon { font-size: 2.5rem; margin-bottom: 10px; }
+        .btn-title { font-size: 1.4rem; font-weight: 800; text-transform: uppercase; }
+        .btn-desc { font-size: 0.9rem; opacity: 0.9; margin-top: 5px; }
+
+        .footer { position: absolute; bottom: 20px; font-size: 0.8rem; opacity: 0.5; }
+    </style>
+</head>
+<body>
+
+    <div class="menu-container">
+        <h1>🎮 My Activity</h1>
+        <p>Избери режим на игра</p>
+
+        <a href="for two.html" class="menu-btn btn-classic">
+            <span class="btn-icon">⚔️</span>
+            <span class="btn-title">Дуел</span>
+            <span class="btn-desc">Бърза игра за двама играчи</span>
+        </a>
+
+        <a href="multi.html" class="menu-btn btn-multi">
+            <span class="btn-icon">🔥</span>
+            <span class="btn-title">Мултиплейър</span>
+            <span class="btn-desc">Парти режим за отбори</span>
+        </a>
+    </div>
+
+    <div class="footer">Version 2.0 • Real-time Gaming</div>
+
+</body>
+</html>

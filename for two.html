@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Activity Royale - Pro</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    
+    <style>
+        :root {
+            --primary: #ff512f; --secondary: #dd2476;
+            --blue-team: #00d2ff; --red-team: #ff4b2b;
+            --glass: rgba(255, 255, 255, 0.1);
+        }
+        body {
+            margin: 0; padding: 10px; font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white; min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+        }
+
+        /* Дискретен бутон за ресет на резултата */
+        .admin-controls { width: 100%; max-width: 600px; display: flex; justify-content: flex-end; margin-bottom: 5px; }
+        .score-reset-btn { 
+            background: rgba(206, 17, 17, 0.2); border: 1px solid rgba(255,255,255,0.1); 
+            color: rgba(255,255,255,0.5); font-size: 0.7rem; padding: 5px 10px; border-radius: 5px; 
+        }
+
+        .scoreboard { display: flex; gap: 15px; margin-bottom: 15px; width: 100%; max-width: 600px; }
+        .score-box { flex: 1; padding: 10px; border-radius: 15px; text-align: center; backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.1); }
+        .blue { background: rgba(0, 210, 255, 0.2); border-color: var(--blue-team); }
+        .red { background: rgba(255, 75, 43, 0.2); border-color: var(--red-team); }
+        .score-number { font-size: 2.2rem; font-weight: bold; display: block; }
+        
+        .game-container { width: 95%; max-width: 650px; background: var(--glass); backdrop-filter: blur(15px); border-radius: 30px; padding: 20px; text-align: center; position: relative; }
+        h1 { font-size: 1.6rem; min-height: 65px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .dice-result { color: #00ffcc; font-size: 2.8rem; }
+        
+        .decks { display: flex; gap: 15px; justify-content: center; margin: 20px 0; min-height: 220px; align-items: center; }
+        .decks.locked { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
+        
+        .deck-container { width: 130px; height: 190px; perspective: 1000px; cursor: pointer; transition: 0.4s; }
+        .deck-container.selected { width: 310px; height: 430px; z-index: 10; }
+        .deck-container.hidden { width: 0; opacity: 0; margin: 0; pointer-events: none; }
+        
+        .deck { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: 0.7s; }
+        .deck.flipped { transform: rotateY(180deg); }
+        .deck-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 20px; border: 2px solid rgba(255,255,255,0.2); }
+        .deck-face img { width: 100%; height: 100%; object-fit: cover; }
+        .deck-back { transform: rotateY(180deg); background: white; color: #222; display: flex; align-items: center; justify-content: center; }
+        
+        .card-content { padding: 25px; font-weight: bold; font-size: 1.7rem; text-align: left; width: 100%; }
+        .card-content div { border-bottom: 2px solid #f0f0f0; padding: 12px 0; }
+        
+        #success-area { display: none; margin: 15px 0; flex-direction: column; gap: 10px; }
+        .btn-success { background: linear-gradient(45deg, #00b09b, #96c93d); padding: 18px; font-size: 1.4rem; border-radius: 15px; border: none; color: white; font-weight: bold; cursor: pointer; }
+        
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { padding: 15px; border: none; border-radius: 15px; font-weight: bold; color: white; cursor: pointer; }
+        
+        /* Стил за деактивиран таймер */
+        .timer-btn { background: linear-gradient(45deg, #f09819, #edde5d); color: #222; }
+        .timer-btn:disabled { background: #555; color: #888; cursor: not-allowed; opacity: 0.5; }
+        
+        .dice-btn { background: linear-gradient(45deg, var(--primary), var(--secondary)); }
+        .reset-btn { background: #444; grid-column: span 2; }
+        
+        .timer-display { font-size: 4.5rem; color: #00ffcc; font-family: monospace; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="admin-controls" style="width: 100%; max-width: 600px; display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center;">
+    <a href="index.html" style="text-decoration: none;">
+        <button class="score-reset-btn" style="background: rgba(0, 210, 255, 0.2); border: 1px solid rgba(0, 210, 255, 0.3); color: #00d2ff;">
+            🏠 ГЛАВНО МЕНЮ
+        </button>
+    </a>
+
+    <button class="score-reset-btn" onclick="resetScores()">
+        НУЛИРАЙ РЕЗУЛТАТА (0:0)
+    </button>
+</div>
+
+<div class="scoreboard">
+    <div class="score-box blue"><span>СИНИ</span><span class="score-number" id="score-blue">0</span></div>
+    <div class="score-box red"><span>ЧЕРВЕНИ</span><span class="score-number" id="score-red">0</span></div>
+</div>
+
+<div class="game-container">
+    <h1 id="game-title">🎮 My Activity</h1>
+    
+    <div class="decks locked" id="decks-wrapper">
+        <div class="deck-container" id="d3" onclick="selectDeck(3, this)"><div class="deck"><div class="deck-face"><img src="3 back.png"></div><div class="deck-face deck-back"></div></div></div>
+        <div class="deck-container" id="d4" onclick="selectDeck(4, this)"><div class="deck"><div class="deck-face"><img src="4 back.png"></div><div class="deck-face deck-back"></div></div></div>
+        <div class="deck-container" id="d5" onclick="selectDeck(5, this)"><div class="deck"><div class="deck-face"><img src="5 back.png"></div><div class="deck-face deck-back"></div></div></div>
+    </div>
+
+    <div id="success-area">
+        <button id="success-label" class="btn-success" onclick="stopTimerAndShowScore()">✅ ПОЗНАТО!</button>
+        <div id="score-selection" style="display:none; gap:10px; margin-top:10px;">
+            <button id="add-blue" style="background:var(--blue-team); flex:1" onclick="addPoint('blue')"></button>
+            <button id="add-red" style="background:var(--red-team); flex:1" onclick="addPoint('red')"></button>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="dice-btn" class="dice-btn" onclick="rollDice()">🎲 ЗАРЧЕ</button>
+        <button id="t-btn" class="timer-btn" onclick="startTimer()" disabled>⏱ СТАРТ 60 СЕК</button>
+        <button class="reset-btn" onclick="resetCloud()">🔄 СЛЕДВАЩ ХОД</button>
+    </div>
+
+    <div class="timer-display" id="timer">60</div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyC98brPgVFU1QIFpE9Q8N61xDiarrFERhM",
+        authDomain: "my-activity-d2bc5.firebaseapp.com",
+        databaseURL: "https://my-activity-d2bc5-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "my-activity-d2bc5",
+        storageBucket: "my-activity-d2bc5.firebasestorage.app",
+        messagingSenderId: "940491408918",
+        appId: "1:940491408918:web:c7b521d5e36f7711bc5737",
+        measurementId: "G-NN76LJX7ET"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref("game_session_private");
+
+    let timerInterval = null;
+    let currentLevelPoints = 0;
+    let isCardSelected = false;
+
+    const cards = {
+        3: [{draw:"Мост", act:"Колебаеш се", speak:"Отговорност"}, {draw:"Планина", act:"Решаваш", speak:"Доверие"}, {draw:"Карта", act:"Объркан", speak:"Провал"}, {draw:"Кораб", act:"Съмняваш се", speak:"Навик"}, {draw:"Часовник", act:"Паника", speak:"Натиск"}, {draw:"Лабиринт", act:"Търпелив", speak:"Баланс"}, {draw:"Плаж", act:"Влюбен", speak:"Граница"}, {draw:"Сянка", act:"Ядосан", speak:"Принцип"}, {draw:"Кула", act:"Спокоен", speak:"Последица"}, {draw:"Маска", act:"Преструваш се", speak:"Истина"}],
+        4: [{draw:"Хаос", act:"Импровизираш", speak:"Смисъл"}, {draw:"Безкрайност", act:"Губиш контрол", speak:"Същност"}, {draw:"Баланс", act:"Колебаеш", speak:"Избор"}],
+        5: [{draw:"Вулкан", act:"Експлозивен", speak:"Енергия"}, {draw:"Космос", act:"Безтегловност", speak:"Мисия"}]
+    };
+
+    const alarm = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg");
+
+    db.on("value", (snap) => {
+        const data = snap.val();
+        if(!data) return;
+
+        document.getElementById("score-blue").textContent = data.scores.blue;
+        document.getElementById("score-red").textContent = data.scores.red;
+        document.getElementById("timer").textContent = data.timer;
+        document.getElementById("game-title").innerHTML = data.title;
+        
+        if(data.cardsLocked) document.getElementById("decks-wrapper").classList.add("locked");
+        else document.getElementById("decks-wrapper").classList.remove("locked");
+
+        if(data.timer === 0 && data.timerRunning) alarm.play();
+
+        if (!data.timerRunning && timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    });
+
+    function rollDice() {
+        const ops = [{i:"🎨", t:"Рисувай"}, {i:"🎭", t:"Покажи"}, {i:"🗣", t:"Обясни"}];
+        let c = 0;
+        const iv = setInterval(() => {
+            const p = ops[Math.floor(Math.random()*3)];
+            document.getElementById("game-title").innerHTML = `<span class="dice-result">${p.i}</span> <span>${p.t}</span>`;
+            if(c++ > 15) {
+                clearInterval(iv);
+                db.update({ title: document.getElementById("game-title").innerHTML, cardsLocked: false });
+            }
+        }, 70);
+    }
+
+    function selectDeck(lvl, el) {
+        currentLevelPoints = lvl;
+        isCardSelected = true;
+        document.getElementById("t-btn").disabled = false; // Активираме бутона на таймера
+        
+        const card = cards[lvl][Math.floor(Math.random()*cards[lvl].length)];
+        document.querySelectorAll(".deck-container").forEach(d => d !== el && d.classList.add("hidden"));
+        el.classList.add("selected");
+        el.querySelector(".deck").classList.add("flipped");
+        el.querySelector(".deck-back").innerHTML = `<div class="card-content"><div>🎨 ${card.draw}</div><div>🎭 ${card.act}</div><div>🗣 ${card.speak}</div></div>`;
+        
+        document.getElementById("success-label").textContent = `✅ ПОЗНАТО (+${lvl} т.)`;
+        document.getElementById("add-blue").textContent = `СИНИ (+${lvl})`;
+        document.getElementById("add-red").textContent = `ЧЕРВЕНИ (+${lvl})`;
+        document.getElementById("success-area").style.display = "flex";
+    }
+
+    function startTimer() {
+        if(!isCardSelected) return; // Защита
+        if(timerInterval) clearInterval(timerInterval);
+        
+        let t = 60;
+        db.update({ timerRunning: true, timer: t });
+        timerInterval = setInterval(() => {
+            t--;
+            if(t >= 0) db.update({ timer: t });
+            else { clearInterval(timerInterval); db.update({ timerRunning: false }); }
+        }, 1000);
+    }
+
+    // Спира таймера при натискане на "Познато"
+    function stopTimerAndShowScore() {
+        if(timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            db.update({ timerRunning: false });
+        }
+        document.getElementById("score-selection").style.display = "flex";
+    }
+
+    function addPoint(team) {
+        db.child("scores").child(team).transaction(s => (s || 0) + currentLevelPoints);
+        resetCloud(); // Директно нулира за следващ ход
+    }
+
+    function resetScores() {
+        if(confirm("Нулиране на резултата?")) {
+            db.child("scores").set({ blue: 0, red: 0 });
+            resetCloud();
+        }
+    }
+
+    function resetCloud() {
+        if(timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
+        isCardSelected = false;
+        document.getElementById("t-btn").disabled = true; // Заключваме таймера обратно
+        
+        db.update({ 
+            title: "🎮 My Activity", 
+            timer: 60, 
+            cardsLocked: true, 
+            timerRunning: false 
+        });
+
+        document.getElementById("success-area").style.display = "none";
+        document.getElementById("score-selection").style.display = "none";
+        document.querySelectorAll(".deck-container").forEach(d => {
+            d.classList.remove("hidden", "selected");
+            d.querySelector(".deck").classList.remove("flipped");
+        });
+    }
+</script>
+</body>
+</html>
+
